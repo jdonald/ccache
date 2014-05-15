@@ -181,6 +181,9 @@ static bool profile_generate = false;
  */
 static bool using_precompiled_header = false;
 
+/* dealing with multiple -arch options? */
+static bool multiple_arch_opt = false;
+
 /*
  * The .gch/.pch/.pth file used for compilation.
  */
@@ -947,12 +950,33 @@ get_object_name_from_cpp(struct args *args, struct mdfour *hash)
 	time_of_compilation = time(NULL);
 
 	if (!direct_i_file) {
+		bool found_arch_opt = false;
+		struct args *revised_args;
+		revised_args = args_init(0, NULL);
+		for (int i = 0; i < args->argc; i++) {
+			if (str_eq(args->argv[i], "-arch")) {
+				if (found_arch_opt) {
+					// multiple -arch options, skip the later ones
+					i++;
+					continue;
+				}
+				else {
+					found_arch_opt = true;
+				}
+			}
+			args_add(revised_args, args->argv[i]);
+		}
 		/* run cpp on the input file to obtain the .i */
-		args_add(args, "-E");
-		args_add(args, input_file);
+		args_add(revised_args, "-E");
+		args_add(revised_args, input_file);
 		cc_log("Running preprocessor");
-		status = execute(args->argv, path_stdout, path_stderr);
-		args_pop(args, 2);
+		status = execute(revised_args->argv, path_stdout, path_stderr);
+		args_free(revised_args);
+	} else if (multiple_arch_opt) {
+		cc_log("Multiple -arch options not supported with optimisation to avoid second preprocessor call.");
+		stats_update(STATS_ERROR);
+		failed();
+		status = 0;
 	} else {
 		/* we are compiling a .i or .ii file - that means we
 		   can skip the cpp stage and directly form the
@@ -1732,13 +1756,18 @@ cc_process_args(struct args *args, struct args **preprocessor_args,
 			}
 		}
 
-		/* Multiple -arch options are too hard. */
+		/* Multiple -arch options: Incorporate all in the hash, but downstream
+     * use only one architecture when invoking the preprocessor. */
 		if (str_eq(argv[i], "-arch")) {
 			if (found_arch_opt) {
-				cc_log("More than one -arch compiler option is unsupported");
-				stats_update(STATS_UNSUPPORTED);
-				result = false;
-				goto out;
+				if (!(conf->sloppiness & SLOPPY_MULTI_ARCH)) {
+					cc_log("More than one -arch compiler option requires multi_arch in CCACHE_SLOPPINESS");
+					stats_update(STATS_UNSUPPORTED);
+					result = false;
+					goto out;
+				}
+				cc_log("Multiple -arch flags detected");
+				multiple_arch_opt = true;
 			} else {
 				found_arch_opt = true;
 			}

@@ -69,6 +69,15 @@ enum stats {
 #define str_eq(s1, s2) (strcmp((s1), (s2)) == 0)
 #define str_startswith(s, p) (strncmp((s), (p), strlen((p))) == 0)
 
+/*
+ * Multiple -arch options to create fat binaries: This is tricky, primarily
+ * because different headers are used across i386 and x86_64. One approach
+ * approach is to store the preprocessor output from only one architecture.
+ * If this ever changes due to a compiler or library upgrade it should
+ * hopefully be detected on either architecture.
+ */
+#define SLOPPY_MULTI_ARCH 64
+
 /* ------------------------------------------------------------------------- */
 /* args.c */
 

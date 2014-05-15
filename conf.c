@@ -100,6 +100,8 @@ parse_sloppiness(const char *str, void *result, char **errmsg)
 			*value |= SLOPPY_PCH_DEFINES;
 		} else if (str_eq(word, "time_macros")) {
 			*value |= SLOPPY_TIME_MACROS;
+		} else if (str_eq(word, "multi_arch")) {
+			*value |= SLOPPY_MULTI_ARCH;
 		} else {
 			*errmsg = format("unknown sloppiness: \"%s\"", word);
 			free(p);
